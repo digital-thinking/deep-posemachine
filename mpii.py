@@ -3,11 +3,15 @@
 # File: mnist.py
 # Author: Yuxin Wu <ppwwyyxx@gmail.com>
 
-import os
-import gzip
-import random
-import numpy
-from six.moves import urllib, range
+# import hdf5storage
+
+
+from os.path import join
+
+import cv2
+import numpy as np
+
+# import h5py
 
 from tensorpack.dataflow.base import RNGDataFlow
 
@@ -16,48 +20,6 @@ __all__ = ['Mpii']
 """ This file is mostly copied from tensorflow example """
 
 SOURCE_URL = 'http://yann.lecun.com/exdb/mnist/'
-
-def maybe_download(filename, work_directory):
-    """Download the data from Yann's website, unless it's already here."""
-    filepath = os.path.join(work_directory, filename)
-    if not os.path.exists(filepath):
-        logger.info("Downloading mnist data to {}...".format(filepath))
-        download(SOURCE_URL + filename, work_directory)
-    return filepath
-
-def _read32(bytestream):
-    dt = numpy.dtype(numpy.uint32).newbyteorder('>')
-    return numpy.frombuffer(bytestream.read(4), dtype=dt)[0]
-
-def extract_images(filename):
-    """Extract the images into a 4D uint8 numpy array [index, y, x, depth]."""
-    with gzip.open(filename) as bytestream:
-        magic = _read32(bytestream)
-        if magic != 2051:
-            raise ValueError(
-               'Invalid magic number %d in MNIST image file: %s' %
-               (magic, filename))
-        num_images = _read32(bytestream)
-        rows = _read32(bytestream)
-        cols = _read32(bytestream)
-        buf = bytestream.read(rows * cols * num_images)
-        data = numpy.frombuffer(buf, dtype=numpy.uint8)
-        data = data.reshape(num_images, rows, cols, 1)
-        return data
-
-
-def extract_labels(filename):
-    """Extract the labels into a 1D uint8 numpy array [index]."""
-    with gzip.open(filename) as bytestream:
-        magic = _read32(bytestream)
-        if magic != 2049:
-            raise ValueError(
-              'Invalid magic number %d in MNIST label file: %s' %
-              (magic, filename))
-        num_items = _read32(bytestream)
-        buf = bytestream.read(num_items)
-        labels = numpy.frombuffer(buf, dtype=numpy.uint8)
-        return labels
 
 class DataSet(object):
     def __init__(self, images, labels, fake_data=False):
@@ -73,8 +35,8 @@ class DataSet(object):
         images = images.reshape(images.shape[0],
                                 images.shape[1] * images.shape[2])
         # Convert from [0, 255] -> [0.0, 1.0].
-        images = images.astype(numpy.float32)
-        images = numpy.multiply(images, 1.0 / 255.0)
+        images = images.astype(np.float32)
+        images = np.multiply(images, 1.0 / 255.0)
         self._images = images
         self._labels = labels
 
@@ -100,46 +62,67 @@ class Mpii(RNGDataFlow):
         Args:
             train_or_test: string either 'train' or 'test'
         """
+
+        #np.set_printoptions(threshold=np.nan)
+
         #dir = 'data/mpii'
         self.train_or_test = train_or_test
         self.shuffle = shuffle
+        self.image_dir = join(dir, 'images')
 
-        TRAIN_IMAGES = 'train-images-idx3-ubyte.gz'
-        TRAIN_LABELS = 'train-labels-idx1-ubyte.gz'
-        TEST_IMAGES = 't10k-images-idx3-ubyte.gz'
-        TEST_LABELS = 't10k-labels-idx1-ubyte.gz'
+        self.image_paths = []
+        self.labels = []
 
-        local_file = maybe_download(TRAIN_IMAGES, dir)
-        train_images = extract_images(local_file)
+        csv_file = 'train_joints.csv' if train_or_test == 'train' else 'test_joints.csv'
 
-        local_file = maybe_download(TRAIN_LABELS, dir)
-        train_labels = extract_labels(local_file)
+        path = join(dir, csv_file)
+        with open(path, 'r') as f:
+            for line in f.readlines():
+                splitted = line.split(',')
+                file_name = splitted[0]
+                ptx = float(splitted[1])
+                pty = float(splitted[2])
+                self.image_paths.append(file_name)
+                self.labels.append((ptx, pty))
 
-        local_file = maybe_download(TEST_IMAGES, dir)
-        test_images = extract_images(local_file)
+        print self.image_paths
+        print self.labels
 
-        local_file = maybe_download(TEST_LABELS, dir)
-        test_labels = extract_labels(local_file)
+        self.reset_state()
+        # mat = hdf5storage.loadmat(path)
+        #mat = h5py.File(path, 'r')
 
-        self.train = DataSet(train_images, train_labels)
-        self.test = DataSet(test_images, test_labels)
+        #    print '\n'
+
+        # self.train = DataSet(train_images, train_labels)
+        #self.test = DataSet(test_images, test_labels)
 
     def size(self):
-        ds = self.train if self.train_or_test == 'train' else self.test
-        return ds.num_examples
+        return len(self.image_paths)
 
     def get_data(self):
-        ds = self.train if self.train_or_test == 'train' else self.test
-        idxs = list(range(ds.num_examples))
+        idxs = list(range(self.size()))
         if self.shuffle:
             self.rng.shuffle(idxs)
         for k in idxs:
-            img = ds.images[k].reshape((28, 28))
-            label = ds.labels[k]
-            yield [img, label]
+            img_path = join(self.image_dir, self.image_paths[k])
+            image = cv2.imread(img_path)
+            old_size = image.shape
+            warped_image = cv2.resize(image, (128, 128))
+            label = self.labels[k]
+            label_x = label[0] * 128.0 / old_size[1]
+            label_y = label[1] * 128.0 / old_size[0]
+            out_label = np.array([label_x, label_y], dtype=np.float32)
+            yield [warped_image, out_label]
 
 if __name__ == '__main__':
-    ds = Mpii('train')
+    ds = Mpii('train', dir='mpii')
     for (img, label) in ds.get_data():
-        from IPython import embed; embed()
-        break
+        coord = (int(label[0]), int(label[1]))
+        cv2.circle(img, coord, 10, [255, 0, 0])
+        cv2.imshow('test', img)
+
+        print img.shape
+        print label
+
+        cv2.waitKey(1000)
