@@ -59,18 +59,31 @@ def calcBoundingBox(points):
     return np.array([(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)])
 
 
-def scaleBestFit(bb, center, targetSize):
-    w = np.abs(bb[0][0] - bb[1][0])
-    h = np.abs(bb[0][1] - bb[2][1])
+def scaleBB(bb, scale):
+    centerX = (bb[0][0] + bb[1][0]) / 2
+    centerY = (bb[0][1] + bb[2][1]) / 2
+    center = (centerX, centerY)
+    scl_center = (centerX * scale[0], centerY * scale[1])
 
-    scaleX = targetSize[0] / float(w)
-    scaleY = targetSize[1] / float(h)
-    scale = ([scaleX, scaleY])
+    p1 = scale * (bb[0] - center) + scl_center
+    p2 = scale * (bb[1] - center) + scl_center
+    p3 = scale * (bb[2] - center) + scl_center
+    p4 = scale * (bb[3] - center) + scl_center
 
-    p1 = scale * (bb[0] - center) + center
-    p2 = scale * (bb[1] - center) + center
-    p3 = scale * (bb[2] - center) + center
-    p4 = scale * (bb[3] - center) + center
+    return np.array([p1, p2, p3, p4])
+
+
+def expandBB(scaledBB, size):
+    bbw = np.abs(scaledBB[0][0] - scaledBB[1][0])
+    bbh = np.abs(scaledBB[0][1] - scaledBB[2][1])
+
+    expandX = (size[0] - bbw) / 2
+    expandY = (size[1] - bbh) / 2
+
+    p1 = scaledBB[0] + (-expandX, -expandY)
+    p2 = scaledBB[1] + (+expandX, -expandY)
+    p3 = scaledBB[2] + (+expandX, +expandY)
+    p4 = scaledBB[3] + (+expandX, +expandY)
 
     return np.array([p1, p2, p3, p4])
 
@@ -134,46 +147,82 @@ class Mpii(RNGDataFlow):
         img_path = join(self.image_dir, self.image_paths[idx])
         # downscale
         image = cv2.imread(img_path)
+        orgSize = image.shape[:2]
         label = self.labels[idx]
         bb = self.boundigBoxes[idx]
-
         dim = self.imageDimension / 2
-        centerX = (bb[0][0] + bb[2][0]) / 2
-        centerY = (bb[0][1] + bb[2][1]) / 2
+        # define the target height of the bounding box
+        targetHeight = 300.0
+        w = np.abs(bb[0][0] - bb[1][0])
+        h = np.abs(bb[0][1] - bb[2][1])
+        targetScale = targetHeight / h
 
-        # scaleds up the ROI within the image
-        bbscaled = scaleBestFit(bb, (centerX, centerY), (self.imageDimension, self.imageDimension))
+        scaledImage = cv2.resize(image, (0, 0), fx=targetScale, fy=targetScale)
+        scaledBB = scaleBB(bb, (targetScale, targetScale))
+        cropRegion = expandBB(scaledBB, (self.imageDimension, self.imageDimension))
 
-        #  ROI dimension
-        bbw = np.abs(bbscaled[0][0] - bbscaled[1][0])
-        bbh = np.abs(bbscaled[0][1] - bbscaled[2][1])
+        startX = cropRegion[0][0] + dim
+        startY = cropRegion[0][1] + dim
+        endX = cropRegion[2][0] + dim
+        endY = cropRegion[2][1] + dim
 
-        # add padding
-        startX = bbscaled[0][0] + dim
-        startY = bbscaled[0][1] + dim
-        endX = bbscaled[2][0] + dim
-        endY = bbscaled[2][1] + dim
-
-        # new label
-        out_labelX = int((label[0] - bbscaled[0][0]))
-        out_labelY = int((label[1] - bbscaled[0][1]))
-        out_label = (out_labelX, out_labelY)
-
-        # debug draw
-        bbcp1 = (int(bbscaled[0][0]), int(bbscaled[0][1]))
-        bbcp2 = (int(bbscaled[2][0]), int(bbscaled[2][1]))
-        bbp1 = (int(bb[0][0]), int(bb[0][1]))
-        bbp2 = (int(bb[2][0]), int(bb[2][1]))
-
-        cv2.circle(image, (label[0], label[1]), 10, [255, 255, 255])
-        cv2.rectangle(image, bbp1, bbp2, [255, 0, 0])
-        cv2.rectangle(image, bbcp1, bbcp2, [255, 255, 0])
-
-        padded_image = np.pad(image, ((dim, dim), (dim, dim), (0, 0)), mode='constant')
+        padded_image = np.pad(scaledImage, ((dim, dim), (dim, dim), (0, 0)), mode='constant')
         croppedImage = padded_image[int(startY):int(endY), int(startX):int(endX)]
 
-        cv2.circle(croppedImage, out_label, 10, [0, 0, 255])
-        # np.lib.pad(croppedImage, (int(self.imageDimension), int(self.imageDimension)), 'constant', constant_values=(0))
+        # new label
+        out_labelX = int((label[0] * targetScale - cropRegion[0][0]))
+        out_labelY = int((label[1] * targetScale - cropRegion[0][1]))
+        out_label = (out_labelX, out_labelY)
+
+        # debug
+
+        cv2.circle(croppedImage, out_label, 10, [255, 255, 255])
+
+        bbp1 = (int(scaledBB[0][0]), int(scaledBB[0][1]))
+        bbp2 = (int(scaledBB[2][0]), int(scaledBB[2][1]))
+
+        crop1 = (int(cropRegion[0][0]), int(cropRegion[0][1]))
+        crop2 = (int(cropRegion[2][0]), int(cropRegion[2][1]))
+
+        cv2.rectangle(scaledImage, bbp1, bbp2, [255, 255, 255])
+        cv2.rectangle(scaledImage, crop1, crop2, [255, 0, 0])
+
+        #
+        # # scaleds up the ROI within the image
+        # bbscaled = scaleBB(bb, targetScale)
+        #
+        # #  ROI dimension
+        # bbw = np.abs(bbscaled[0][0] - bbscaled[1][0])
+        # bbh = np.abs(bbscaled[0][1] - bbscaled[2][1])
+        #
+        # print bbw, bbh
+        #
+        # # add padding
+        # startX = bbscaled[0][0] + dim
+        # startY = bbscaled[0][1] + dim
+        # endX = bbscaled[2][0] + dim
+        # endY = bbscaled[2][1] + dim
+        #
+        # # new label
+        # out_labelX = int((label[0] - bbscaled[0][0]))
+        # out_labelY = int((label[1] - bbscaled[0][1]))
+        # out_label = (out_labelX, out_labelY)
+        #
+        # # debug draw
+        # bbcp1 = (int(bbscaled[0][0]), int(bbscaled[0][1]))
+        # bbcp2 = (int(bbscaled[2][0]), int(bbscaled[2][1]))
+        # bbp1 = (int(bb[0][0]), int(bb[0][1]))
+        # bbp2 = (int(bb[2][0]), int(bb[2][1]))
+        #
+        # cv2.circle(scaledImage, (label[0], label[1]), 10, [255, 255, 255])
+        # cv2.rectangle(scaledImage, bbp1, bbp2, [255, 0, 0])
+        # cv2.rectangle(scaledImage, bbcp1, bbcp2, [255, 255, 0])
+        #
+        # padded_image = np.pad(scaledImage, ((dim, dim), (dim, dim), (0, 0)), mode='constant')
+        # croppedImage = padded_image[int(startY):int(endY), int(startX):int(endX)]
+        #
+        # cv2.circle(scaledImage, out_label, 10, [0, 0, 255])
+        # # np.lib.pad(croppedImage, (int(self.imageDimension), int(self.imageDimension)), 'constant', constant_values=(0))
 
 
         return [croppedImage, out_label]
