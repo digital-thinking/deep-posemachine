@@ -52,12 +52,37 @@ class DataSet(object):
     def num_examples(self):
         return self._num_examples
 
+
+def calcBoundingBox(points):
+    min_x, min_y = np.min(points, axis=0)
+    max_x, max_y = np.max(points, axis=0)
+    return np.array([(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)])
+
+
+def scaleBestFit(bb, center, targetSize):
+    w = np.abs(bb[0][0] - bb[1][0])
+    h = np.abs(bb[0][1] - bb[2][1])
+
+    scaleX = targetSize[0] / float(w)
+    scaleY = targetSize[1] / float(h)
+    scale = ([scaleX, scaleY])
+
+    p1 = scale * (bb[0] - center) + center
+    p2 = scale * (bb[1] - center) + center
+    p3 = scale * (bb[2] - center) + center
+    p4 = scale * (bb[3] - center) + center
+
+    return np.array([p1, p2, p3, p4])
+
+
 class Mpii(RNGDataFlow):
     """
     Return [image, label],
         image is 28x28 in the range [0,1]
     """
     def __init__(self, train_or_test, shuffle=True, dir=None):
+
+        self.imageDimension = 512
         """
         Args:
             train_or_test: string either 'train' or 'test'
@@ -72,6 +97,7 @@ class Mpii(RNGDataFlow):
 
         self.image_paths = []
         self.labels = []
+        self.boundigBoxes = []
 
         csv_file = 'train_joints.csv' if train_or_test == 'train' else 'test_joints.csv'
 
@@ -80,13 +106,17 @@ class Mpii(RNGDataFlow):
             for line in f.readlines():
                 splitted = line.split(',')
                 file_name = splitted[0]
-                ptx = float(splitted[1])
-                pty = float(splitted[2])
-                self.image_paths.append(file_name)
-                self.labels.append((ptx, pty))
 
-        print self.image_paths
-        print self.labels
+                # 0 - r ankle, 1 - r knee, 2 - r hip, 3 - l hip, 4 - l knee, 5 - l ankle, 6 - pelvis,
+                # 7 - thorax, 8 - upper neck, 9 - head top, 10 - r wrist, 10 - r wrist, 12 - r shoulder,
+                # 13 - l shoulder, 14 - l elbow, 15 - l wrist
+
+                pointlist = [float(x) for x in splitted[1:]]
+                points = np.array(pointlist, dtype=np.int32).reshape((16, 2))
+                self.image_paths.append(file_name)
+                self.labels.append(points[9])
+                self.boundigBoxes.append(calcBoundingBox(points))
+
 
         self.reset_state()
         # mat = hdf5storage.loadmat(path)
@@ -100,29 +130,65 @@ class Mpii(RNGDataFlow):
     def size(self):
         return len(self.image_paths)
 
+    def cropAndResizeImage(self, idx):
+        img_path = join(self.image_dir, self.image_paths[idx])
+        # downscale
+        image = cv2.imread(img_path)
+        label = self.labels[idx]
+        bb = self.boundigBoxes[idx]
+
+        dim = self.imageDimension / 2
+        centerX = (bb[0][0] + bb[2][0]) / 2
+        centerY = (bb[0][1] + bb[2][1]) / 2
+
+        # scaleds up the ROI within the image
+        bbscaled = scaleBestFit(bb, (centerX, centerY), (self.imageDimension, self.imageDimension))
+
+        #  ROI dimension
+        bbw = np.abs(bbscaled[0][0] - bbscaled[1][0])
+        bbh = np.abs(bbscaled[0][1] - bbscaled[2][1])
+
+        # add padding
+        startX = bbscaled[0][0] + dim
+        startY = bbscaled[0][1] + dim
+        endX = bbscaled[2][0] + dim
+        endY = bbscaled[2][1] + dim
+
+        # new label
+        out_labelX = int((label[0] - bbscaled[0][0]))
+        out_labelY = int((label[1] - bbscaled[0][1]))
+        out_label = (out_labelX, out_labelY)
+
+        # debug draw
+        bbcp1 = (int(bbscaled[0][0]), int(bbscaled[0][1]))
+        bbcp2 = (int(bbscaled[2][0]), int(bbscaled[2][1]))
+        bbp1 = (int(bb[0][0]), int(bb[0][1]))
+        bbp2 = (int(bb[2][0]), int(bb[2][1]))
+
+        cv2.circle(image, (label[0], label[1]), 10, [255, 255, 255])
+        cv2.rectangle(image, bbp1, bbp2, [255, 0, 0])
+        cv2.rectangle(image, bbcp1, bbcp2, [255, 255, 0])
+
+        padded_image = np.pad(image, ((dim, dim), (dim, dim), (0, 0)), mode='constant')
+        croppedImage = padded_image[int(startY):int(endY), int(startX):int(endX)]
+
+        cv2.circle(croppedImage, out_label, 10, [0, 0, 255])
+        # np.lib.pad(croppedImage, (int(self.imageDimension), int(self.imageDimension)), 'constant', constant_values=(0))
+
+
+        return [croppedImage, out_label]
+
     def get_data(self):
         idxs = list(range(self.size()))
         if self.shuffle:
             self.rng.shuffle(idxs)
         for k in idxs:
-            img_path = join(self.image_dir, self.image_paths[k])
-            image = cv2.imread(img_path)
-            old_size = image.shape
-            warped_image = cv2.resize(image, (128, 128))
-            label = self.labels[k]
-            label_x = label[0] * 128.0 / old_size[1]
-            label_y = label[1] * 128.0 / old_size[0]
-            out_label = np.array([label_x, label_y], dtype=np.float32)
-            yield [warped_image, out_label]
+            yield self.cropAndResizeImage(k)
 
 if __name__ == '__main__':
     ds = Mpii('train', dir='mpii')
     for (img, label) in ds.get_data():
         coord = (int(label[0]), int(label[1]))
-        cv2.circle(img, coord, 10, [255, 0, 0])
+        #cv2.circle(img, coord, 10, [255, 0, 0])
         cv2.imshow('test', img)
-
-        print img.shape
-        print label
-
         cv2.waitKey(1000)

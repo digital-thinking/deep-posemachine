@@ -8,7 +8,7 @@ class Model(ModelDesc):
         super(Model, self).__init__()
 
     def _get_input_vars(self):
-        return [InputVar(tf.float32, [None, 128, 128, 3], 'input'),
+        return [InputVar(tf.float32, [None, 256, 256, 3], 'input'),
                 InputVar(tf.float32, [None, 2], 'label')
                 ]
 
@@ -17,26 +17,20 @@ class Model(ModelDesc):
         if is_training:
             tf.image_summary("train_image", image, 10)
 
-        with argscope(Conv2D, nl=BNReLU(is_training), use_bias=False, kernel_shape=3):
+        with argscope(Conv2D, nl=ReLU(is_training), use_bias=False, kernel_shape=9):
             pred = LinearWrap(image) \
                 .Conv2D('conv1.1', out_channel=64) \
-                .Conv2D('conv1.2', out_channel=64) \
-                .MaxPooling('pool1', 3, stride=2, padding='SAME') \
+                .MaxPooling('pool1', 2, stride=2, padding='SAME') \
                 .Conv2D('conv2.1', out_channel=128) \
-                .Conv2D('conv2.2', out_channel=128) \
-                .MaxPooling('pool2', 3, stride=2, padding='SAME') \
+                .MaxPooling('pool2', 2, stride=2, padding='SAME') \
                 .Conv2D('conv3.1', out_channel=256) \
-                .Conv2D('conv3.2', out_channel=256) \
-                .MaxPooling('pool3', 3, stride=2, padding='SAME') \
-                .Conv2D('conv4.1', out_channel=512) \
-                .Conv2D('conv4.2', out_channel=512) \
-                .FullyConnected('fc0', 512,
-                                b_init=tf.constant_initializer(0.1)) \
-                .FullyConnected('fc1', 512,
-                                b_init=tf.constant_initializer(0.1)) \
-                .FullyConnected('linear', out_dim=2, nl=tf.identity)()
+                .MaxPooling('pool3', 2, stride=2, padding='SAME') \
+                .Conv2D('conv4.1', out_channel=512, kernel_shape=5) \
+                .Conv2D('conv4.2', out_channel=512, kernel_shape=9) \
+                .Conv2D('conv4.3', out_channel=512, kernel_shape=1) \
+                .Conv2D('conv4.4', out_channel=512, kernel_shape=1)
 
-        # cost = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, label)
+            # cost = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, label)
         cost = tf.squared_difference(pred, label, name='squared_difference')
         cost = tf.reduce_mean(cost, name='mse')
 
