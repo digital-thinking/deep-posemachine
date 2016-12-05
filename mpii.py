@@ -112,7 +112,7 @@ class Mpii(RNGDataFlow):
         self.labels = []
         self.boundigBoxes = []
 
-        csv_file = 'train_joints.csv' if train_or_test == 'train' else 'test_joints.csv'
+        csv_file = 'train_joints.csv' if train_or_test == 'train' else 'train_joints.csv'  # test
 
         path = join(dir, csv_file)
         with open(path, 'r') as f:
@@ -132,18 +132,13 @@ class Mpii(RNGDataFlow):
 
 
         self.reset_state()
-        # mat = hdf5storage.loadmat(path)
-        #mat = h5py.File(path, 'r')
-
-        #    print '\n'
-
-        # self.train = DataSet(train_images, train_labels)
-        #self.test = DataSet(test_images, test_labels)
 
     def size(self):
-        return len(self.image_paths)
+        # return len(self.image_paths)
+        return 1
 
     def cropAndResizeImage(self, idx):
+        path = self.image_paths[idx]
         img_path = join(self.image_dir, self.image_paths[idx])
         # downscale
         image = cv2.imread(img_path)
@@ -172,11 +167,11 @@ class Mpii(RNGDataFlow):
         # new label
         out_labelX = int((label[0] * targetScale - cropRegion[0][0]))
         out_labelY = int((label[1] * targetScale - cropRegion[0][1]))
-        out_label = (out_labelX, out_labelY)
+        out_label = np.array([out_labelY, out_labelX])
 
         # debug
 
-        cv2.circle(croppedImage, out_label, 10, [255, 255, 255])
+        cv2.circle(croppedImage, (out_label[1], out_label[0]), 10, [255, 255, 255])
 
         bbp1 = (int(scaledBB[0][0]), int(scaledBB[0][1]))
         bbp2 = (int(scaledBB[2][0]), int(scaledBB[2][1]))
@@ -186,46 +181,9 @@ class Mpii(RNGDataFlow):
 
         cv2.rectangle(scaledImage, bbp1, bbp2, [255, 255, 255])
         cv2.rectangle(scaledImage, crop1, crop2, [255, 0, 0])
-
-        #
-        # # scaleds up the ROI within the image
-        # bbscaled = scaleBB(bb, targetScale)
-        #
-        # #  ROI dimension
-        # bbw = np.abs(bbscaled[0][0] - bbscaled[1][0])
-        # bbh = np.abs(bbscaled[0][1] - bbscaled[2][1])
-        #
-        # print bbw, bbh
-        #
-        # # add padding
-        # startX = bbscaled[0][0] + dim
-        # startY = bbscaled[0][1] + dim
-        # endX = bbscaled[2][0] + dim
-        # endY = bbscaled[2][1] + dim
-        #
-        # # new label
-        # out_labelX = int((label[0] - bbscaled[0][0]))
-        # out_labelY = int((label[1] - bbscaled[0][1]))
-        # out_label = (out_labelX, out_labelY)
-        #
-        # # debug draw
-        # bbcp1 = (int(bbscaled[0][0]), int(bbscaled[0][1]))
-        # bbcp2 = (int(bbscaled[2][0]), int(bbscaled[2][1]))
-        # bbp1 = (int(bb[0][0]), int(bb[0][1]))
-        # bbp2 = (int(bb[2][0]), int(bb[2][1]))
-        #
-        # cv2.circle(scaledImage, (label[0], label[1]), 10, [255, 255, 255])
-        # cv2.rectangle(scaledImage, bbp1, bbp2, [255, 0, 0])
-        # cv2.rectangle(scaledImage, bbcp1, bbcp2, [255, 255, 0])
-        #
-        # padded_image = np.pad(scaledImage, ((dim, dim), (dim, dim), (0, 0)), mode='constant')
-        # croppedImage = padded_image[int(startY):int(endY), int(startX):int(endX)]
-        #
-        # cv2.circle(scaledImage, out_label, 10, [0, 0, 255])
-        # # np.lib.pad(croppedImage, (int(self.imageDimension), int(self.imageDimension)), 'constant', constant_values=(0))
-
-
-        return [croppedImage, out_label]
+        # print croppedImage.shape
+        # print out_label.shape
+        return [croppedImage / np.float32(255.0) - np.float32(0.5), out_label]
 
     def get_data(self):
         idxs = list(range(self.size()))
