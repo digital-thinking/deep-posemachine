@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 
 sigma = 32.0
-BATCH_SIZE = 1
+BATCH_SIZE = None
 
 
 def pdf_debug_img(name, float_image, sigma):
@@ -18,20 +18,20 @@ def pdf_debug_img(name, float_image, sigma):
 
 
 def gaussian_image(label):
-    indices = np.indices([512, 512])[:, ::8, ::8].astype(np.float32)
+    indices = np.indices([368, 368])[:, ::8, ::8].astype(np.float32)
     coords = tf.constant(indices)
     stretch = tf.reshape(tf.to_float(label), [-1, 2, 1, 1])
-    stretch = tf.tile(stretch, [1, 1, 64, 64])
+    stretch = tf.tile(stretch, [1, 1, 46, 46])
     # pdf = 1.0/(np.sqrt(2*(sigma**2)*np.pi)) * tf.exp(-tf.pow(coords-stretch,2)/(2*sigma**2))
     pdf = tf.pow(coords - stretch, 2) / (2 * sigma ** 2)
     pdf = tf.reduce_sum(pdf, [1])
     # pdf = tf.reduce_prod(pdf,[1])
     # print debug
     pdf = tf.expand_dims(pdf, 3)
-    debug = 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) * tf.exp(-pdf)
+    debug = tf.exp(-pdf)  # 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) *
     pdf_debug_img('super', debug, sigma)
 
-    return debug  # pdf
+    return debug
 
 
 class Model(ModelDesc):
@@ -39,7 +39,7 @@ class Model(ModelDesc):
         super(Model, self).__init__()
 
     def _get_input_vars(self):
-        return [InputVar(tf.float32, [BATCH_SIZE, 512, 512, 3], 'input'),
+        return [InputVar(tf.float32, [BATCH_SIZE, 368, 368, 3], 'input'),
                 InputVar(tf.int32, [BATCH_SIZE, 2], 'label')
                 ]
 
@@ -70,7 +70,7 @@ class Model(ModelDesc):
 
         # debug_pred = 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) * tf.exp(-pred)
         # pred = tf.reshape(tf.nn.softmax(tf.reshape(pred,[5,64*64])),[5,64,64,1])
-        pred = tf.exp(pred)
+        belief_maps_output = tf.identity(pred, "belief_maps_output")
         pdf_debug_img('pred', pred, sigma)
 
         gaussian = gaussian_image(label)
@@ -88,7 +88,7 @@ class Model(ModelDesc):
         #add_moving_summary(tf.reduce_mean(wrong, name='train_error'))
 
         # weight decay on all W of fc layers
-        wd_cost = tf.mul(0.000,
+        wd_cost = tf.mul(0.000001,
                          regularize_cost('conv.*/W', tf.nn.l2_loss),
                          name='wd_cost')
         add_moving_summary(cost, wd_cost)
