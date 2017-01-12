@@ -1,14 +1,13 @@
 import argparse
 
+import cv2
+import numpy as np
 from tensorpack import *
 
 from mpii import Mpii
 from net import Model
-import cv2
-import numpy as np
 
 BATCH_SIZE = 10
-
 
 def get_data(train_or_test, batch_size=10):
     isTrain = train_or_test == 'train'
@@ -72,7 +71,7 @@ def get_config():
         session_config=sess_config,
         model=Model(),
         step_per_epoch=step_per_epoch,
-        max_epoch=250,
+        max_epoch=300,
     )
 
 
@@ -115,23 +114,25 @@ if __name__ == '__main__':
             pred = SimpleDatasetPredictor(config, get_data('test', 1))
             i = 0
             for input, output in pred.get_result():
+
                 raw_img = input[0][0]
                 label = input[1][0]
-                believe = output[0][0, :, :, 0]
-                believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
-
-                believe = believe - believe.min()
-                believe = believe / believe.max()
-                believe = np.uint8(255 * believe)
-                believe = np.dstack([believe, believe, believe])
-
-                # (raw_img, label)
                 img = 255.0 * ((raw_img + 1) / 2.0)
                 img = np.uint8(img)
-                coord = (int(label[1]), int(label[0]))
-                cv2.circle(believe, coord, 10, [255, 0, 0])
                 cv2.imwrite('mpii/results/in_%d.png' % i, img)
-                cv2.imwrite('mpii/results/out_%d.png' % i, believe)
+                for j in range(label.shape[0]):
+                    believe = output[0][0, :, :, j]
+                    believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
+
+                    believe = believe - believe.min()
+                    believe = believe / believe.max()
+                    believe = np.uint8(255 * believe)
+                    believe = np.dstack([believe, believe, believe])
+
+                    # (raw_img, label)
+                    coord = (int(label[j, 1]), int(label[j, 0]))
+                    cv2.circle(believe, coord, 10, [255, 0, 0])
+                    cv2.imwrite('mpii/results/out_%d_%d.png' % (i, j), believe)
                 i = i + 1
-                cv2.waitKey(1000)
+                # cv2.waitKey(1000)
                 # SimpleTrainer(config).train()

@@ -95,7 +95,7 @@ class Mpii(RNGDataFlow):
                 pointlist = [float(x) for x in splitted[1:]]
                 points = np.array(pointlist, dtype=np.int32).reshape((16, 2))
                 self.image_paths.append(file_name)
-                self.labels.append(points[9])
+                self.labels.append(points)
                 self.boundigBoxes.append(calcBoundingBox(points))
 
 
@@ -133,9 +133,9 @@ class Mpii(RNGDataFlow):
         croppedImage = padded_image[startY:endY, startX:endX]
 
         # new label
-        out_labelX = int((label[0] * targetScale - cropRegion[0][0]))
-        out_labelY = int((label[1] * targetScale - cropRegion[0][1]))
-        out_label = np.array([out_labelY, out_labelX])
+        out_labelX = (label[:, 0:1] * targetScale - cropRegion[0][0]).astype(np.int32)
+        out_labelY = (label[:, 1:2] * targetScale - cropRegion[0][1]).astype(np.int32)
+        out_label = np.hstack([out_labelY, out_labelX])
 
         # debug
 
