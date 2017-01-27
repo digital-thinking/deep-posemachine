@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 from tensorpack import *
 from tensorpack.tfutils.summary import *
 
@@ -45,77 +44,84 @@ class Model(ModelDesc):
 
     def _build_graph(self, input_vars, is_training):
         image, label = input_vars
-        if is_training:
-            tf.image_summary("train_image", image, 10)
 
-            # shared = LinearWrap(image) \
-            # .Conv2D('conv1.1', out_channel=64, kernel_shape=9) \
-            # .MaxPooling('pool1', 2, stride=2, padding='SAME') \
-            # .Conv2D('conv2.1', out_channel=128, kernel_shape=9) \
-            # .MaxPooling('pool2', 2, stride=2, padding='SAME') \
-            # .Conv2D('conv3.1', out_channel=256, kernel_shape=9) \
-            # .MaxPooling('pool3', 2, stride=2, padding='SAME') \
-            # .Conv2D('conv4.1', out_channel=512, kernel_shape=5) \
-            # .Conv2D('conv4.2', out_channel=512, kernel_shape=9) \
-            # .Conv2D('conv4.3', out_channel=512, kernel_shape=1) \
-            # .Conv2D('conv4.4', out_channel=BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)()
+        tf.image_summary("train_image", image, 10)
 
-            shared = (LinearWrap(image)
-                      .Conv2D('conv1_1', 64, kernel_shape=3)
-                      .Conv2D('conv1_2', 64, kernel_shape=3)
-                      .MaxPooling('pool1', 2)
-                      # 184
-                      .Conv2D('conv2_1', 128, kernel_shape=3)
-                      .Conv2D('conv2_2', 128, kernel_shape=3)
-                      .MaxPooling('pool2', 2)
-                      # 92
-                      .Conv2D('conv3_1', 256, kernel_shape=3)
-                      .Conv2D('conv3_2', 256, kernel_shape=3)
-                      .Conv2D('conv3_3', 256, kernel_shape=3)
-                      .Conv2D('conv3_4', 256, kernel_shape=3)
-                      .MaxPooling('pool3', 2)
-                      # 46
-                      .Conv2D('conv4_1', 512, kernel_shape=3)
-                      .Conv2D('conv4_2', 512, kernel_shape=3)
-                      .Conv2D('conv4_3_CPM', 256, kernel_shape=3)
-                      .Conv2D('conv4_4_CPM', 256, kernel_shape=3)
-                      .Conv2D('conv4_5_CPM', 256, kernel_shape=3)
-                      .Conv2D('conv4_6_CPM', 256, kernel_shape=3)
-                      .Conv2D('conv4_7_CPM', 128, kernel_shape=3)())
-
-            def add_stage(stage, l):
-                l = tf.concat(0, [l, shared])
-                for i in range(1, 6):
-                    l = Conv2D('Mconv{}_stage{}'.format(i, stage), l, 128, kernel_shape=7)
-                    l = Conv2D('Mconv6_stage{}'.format(stage), l, 128, kernel_shape=1)
-                    l = Conv2D('Mconv7_stage{}'.format(stage), l, BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)
-                return l
-
-            out1 = (LinearWrap(shared)
-                    .Conv2D('conv5_1_CPM', 512, kernel_shape=1)
-                    .Conv2D('conv5_2_CPM', 15, kernel_shape=1, nl=tf.identity)())
-            out2 = add_stage(2, out1)
-            out3 = add_stage(3, out2)
-            out4 = add_stage(4, out3)
-            out5 = add_stage(5, out4)
-            out6 = add_stage(6, out4)
-            pred = tf.image.resize_bilinear(out6, [368, 368], name='resized_map')
-
-        # debug_pred = 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) * tf.exp(-pred)
-        # pred = tf.reshape(tf.nn.softmax(tf.reshape(pred,[5,64*64])),[5,64,64,1])
-        belief_maps_output = tf.identity(pred, "belief_maps_output")
-        pred = tf.transpose(pred, perm=[0, 3, 1, 2])
-        pred = tf.reshape(pred, [-1, 46, 46, 1])
-        # pdf_debug_img('pred', pred, sigma)
+        # shared = LinearWrap(image) \
+        # .Conv2D('conv1.1', out_channel=64, kernel_shape=9) \
+        # .MaxPooling('pool1', 2, stride=2, padding='SAME') \
+        # .Conv2D('conv2.1', out_channel=128, kernel_shape=9) \
+        # .MaxPooling('pool2', 2, stride=2, padding='SAME') \
+        # .Conv2D('conv3.1', out_channel=256, kernel_shape=9) \
+        # .MaxPooling('pool3', 2, stride=2, padding='SAME') \
+        # .Conv2D('conv4.1', out_channel=512, kernel_shape=5) \
+        # .Conv2D('conv4.2', out_channel=512, kernel_shape=9) \
+        # .Conv2D('conv4.3', out_channel=512, kernel_shape=1) \
+        # .Conv2D('conv4.4', out_channel=BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)()
 
 
         gaussian = gaussian_image(label)
+
+        shared = (LinearWrap(image)
+                  .Conv2D('conv1_1', 64, kernel_shape=3)
+                  .Conv2D('conv1_2', 64, kernel_shape=3)
+                  .MaxPooling('pool1', 2)
+                  # 184
+                  .Conv2D('conv2_1', 128, kernel_shape=3)
+                  .Conv2D('conv2_2', 128, kernel_shape=3)
+                  .MaxPooling('pool2', 2)
+                  # 92
+                  .Conv2D('conv3_1', 256, kernel_shape=3)
+                  .Conv2D('conv3_2', 256, kernel_shape=3)
+                  .Conv2D('conv3_3', 256, kernel_shape=3)
+                  .Conv2D('conv3_4', 256, kernel_shape=3)
+                  .MaxPooling('pool3', 2)
+                  # 46
+                  .Conv2D('conv4_1', 512, kernel_shape=3)
+                  .Conv2D('conv4_2', 512, kernel_shape=3)
+                  .Conv2D('conv4_3_CPM', 256, kernel_shape=3)
+                  .Conv2D('conv4_4_CPM', 256, kernel_shape=3)
+                  .Conv2D('conv4_5_CPM', 256, kernel_shape=3)
+                  .Conv2D('conv4_6_CPM', 256, kernel_shape=3)
+                  .Conv2D('conv4_7_CPM', 128, kernel_shape=3)())
+
+        def add_stage(stage, l):
+            l = tf.concat(3, [l, shared])
+            for i in range(1, 6):
+                l = Conv2D('Mconv{}_stage{}'.format(i, stage), l, 128, kernel_shape=7)
+            l = Conv2D('Mconv6_stage{}'.format(stage), l, 128, kernel_shape=1)
+            l = Conv2D('Mconv7_stage{}'.format(stage), l, BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)
+            pred = tf.transpose(l, perm=[0, 3, 1, 2])
+            pred = tf.reshape(pred, [-1, 46, 46, 1])
+            error = tf.squared_difference(pred, gaussian, name='se_{}'.format(stage))
+            return l, error
+
+        belief = (LinearWrap(shared)
+                  .Conv2D('conv5_1_CPM', 512, kernel_shape=1)
+                  .Conv2D('conv5_2_CPM', BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)())
+        se_calc = tf.transpose(belief, perm=[0, 3, 1, 2])
+        se_calc = tf.reshape(se_calc, [-1, 46, 46, 1])
+        error = tf.squared_difference(se_calc, gaussian, name='se_{}'.format(1))
+
+        for i in range(2, 7):
+            belief, e = add_stage(i, belief)
+            error = error + e
+
+        belief = tf.image.resize_bilinear(belief, [368, 368], name='resized_map')
+
+        # debug_pred = 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) * tf.exp(-pred)
+        # pred = tf.reshape(tf.nn.softmax(tf.reshape(pred,[5,64*64])),[5,64,64,1])
+        belief_maps_output = tf.identity(belief, "belief_maps_output")
+
+        # pdf_debug_img('pred', pred, sigma)
+
+
         # diff = (pred - gaussian)
         # dbg = tf.reduce_sum(tf.to_float(tf.is_nan(gaussian)))
-        cost = tf.squared_difference(pred, gaussian, name='l2_norm')
+        # cost = tf.squared_difference(pred, gaussian, name='l2_norm')
         # pdf_debug_img('cost', cost, sigma)
 
-        cost = tf.reduce_mean(cost, name='mse')
+        cost = tf.reduce_mean(error, name='mse')
 
         # compute the number of failed samples, for ClassificationError to use at test time
         wrong = tf.identity(cost, name='wrong')

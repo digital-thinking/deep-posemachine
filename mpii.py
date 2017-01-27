@@ -110,7 +110,7 @@ class Mpii(RNGDataFlow):
         img_path = join(self.image_dir, self.image_paths[idx])
         # downscale
         image = cv2.imread(img_path)
-        orgSize = image.shape[:2]
+        # orgSize = image.shape[:2]
         label = self.labels[idx]
         bb = self.boundigBoxes[idx]
         dim = self.imageDimension / 2

@@ -1,13 +1,12 @@
 import argparse
 
-import cv2
 import numpy as np
 from tensorpack import *
 
 from mpii import Mpii
 from net import Model
 
-BATCH_SIZE = 10
+BATCH_SIZE = 5
 
 def get_data(train_or_test, batch_size=10):
     isTrain = train_or_test == 'train'
