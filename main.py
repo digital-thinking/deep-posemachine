@@ -63,7 +63,7 @@ def get_config():
             ModelSaver(),
             InferenceRunner(dataset_test, ClassificationError()),
             ScheduledHyperParamSetter('learning_rate',
-                                      [(1, 1E-3), (100, 1E-4), (200, 1E-5)])
+                                      [(1, 1E-3), (60, 1E-4), (120, 1E-5)])
             #DumpParamAsImage('pdf_label')
 
         ]),
@@ -74,7 +74,8 @@ def get_config():
     )
 
 
-def get_pred_config(weights_path, input_var_names=['input', 'label'], output_names=['belief_maps_output']):
+def get_pred_config(weights_path, input_var_names=['input', 'label'],
+                    output_names=['belief_maps_output', 'debug_cords', 'euclid_distance', 'pcp']):
     loaded_model = SaverRestore(weights_path)
     config = PredictConfig(
         model=Model(),
@@ -132,11 +133,13 @@ if __name__ == '__main__':
 
                 raw_img = input[0][0]
                 label = input[1][0]
+                indices = output[1]
+                dist = output[2]
+                pcp = output[3]
                 img = 255.0 * ((raw_img + 1) / 2.0)
                 img = np.uint8(img)
 
                 for bone_a, bone_b in skeleton:
-                    print bone_a + ":" + bone_b
                     idx_from = names.index(bone_a)
                     idx_to = names.index(bone_b)
 
@@ -146,7 +149,7 @@ if __name__ == '__main__':
                     believe_to = np.squeeze(np.argwhere(tempb.max() == tempb))
                     cv2.line(img, (believe_from[1], believe_from[0]), (believe_to[1], believe_to[0]), [0, 0, 255])
 
-                cv2.imwrite('mpii/results/result_%d.png' % i, img)
+                cv2.imwrite('mpii/results/%d_augmented.png' % i, img)
                 for j in range(label.shape[0]):
                     believe = output[0][0, :, :, j]
                     #believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
@@ -160,7 +163,7 @@ if __name__ == '__main__':
                     coord = (int(label[j, 1]), int(label[j, 0]))
                     cv2.circle(believe, coord, 10, [255, 0, 0])
                     name = names[j]
-                    cv2.imwrite('mpii/results/believe_%d_%s.png' % (i, name), believe)
+                    cv2.imwrite('mpii/results/%d_believe_%s.png' % (i, name), believe)
                 i = i + 1
                 # cv2.waitKey(1000)
                 # SimpleTrainer(config).train()
