@@ -85,6 +85,21 @@ def get_pred_config(weights_path, input_var_names=['input', 'label'], output_nam
     )
     return config
 
+
+# 0 - r ankle, 1 - r knee, 2 - r hip, 3 - l hip, 4 - l knee, 5 - l ankle, 6 - pelvis,
+# 7 - thorax, 8 - upper neck, 9 - head top, 10 - r wrist, 10 - r wrist, 12 - r shoulder,
+# 13 - l shoulder, 14 - l elbow, 15 - l wrist
+names = ['r ankle', 'r knee', 'r hip', 'l hip', 'l knee', 'l ankle', 'pelvis', 'thorax', 'upper neck', 'head top',
+         'r wrist', 'r elbow', 'r shoulder',
+         'l shoulder', 'l elbow', 'l wrist']
+
+skeleton = [['r ankle', 'r knee'], ['l ankle', 'l knee'], ['l wrist', 'l elbow'], ['r wrist', 'r elbow'],
+            ['r shoulder', 'r elbow'], ['l shoulder', 'l elbow'], ['r knee', 'r hip'], ['l knee', 'l hip'],
+            ['thorax', 'l shoulder'], ['thorax', 'r shoulder'], ['thorax', 'upper neck'], ['upper neck', 'head top'],
+            ['pelvis', 'r hip'], ['pelvis', 'l hip'], ['pelvis', 'thorax']]
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')  # nargs='*' in multi mode
@@ -107,7 +122,8 @@ if __name__ == '__main__':
             config.nr_tower = len(args.gpu.split(','))
 
         if not test:
-            QueueInputTrainer(config).train()
+            # QueueInputTrainer(config).train()
+            SimpleTrainer(config).train()
         else:
             config = get_pred_config(args.load, input_var_names=["input", "label"])  # 'label'
             pred = SimpleDatasetPredictor(config, get_data('test', 1))
@@ -118,10 +134,22 @@ if __name__ == '__main__':
                 label = input[1][0]
                 img = 255.0 * ((raw_img + 1) / 2.0)
                 img = np.uint8(img)
-                cv2.imwrite('mpii/results/in_%d.png' % i, img)
+
+                for bone_a, bone_b in skeleton:
+                    print bone_a + ":" + bone_b
+                    idx_from = names.index(bone_a)
+                    idx_to = names.index(bone_b)
+
+                    tempa = output[0][0, :, :, idx_from]
+                    tempb = output[0][0, :, :, idx_to]
+                    believe_from = np.squeeze(np.argwhere(tempa.max() == tempa))
+                    believe_to = np.squeeze(np.argwhere(tempb.max() == tempb))
+                    cv2.line(img, (believe_from[1], believe_from[0]), (believe_to[1], believe_to[0]), [0, 0, 255])
+
+                cv2.imwrite('mpii/results/result_%d.png' % i, img)
                 for j in range(label.shape[0]):
                     believe = output[0][0, :, :, j]
-                    believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
+                    #believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
 
                     believe = believe - believe.min()
                     believe = believe / believe.max()
@@ -131,7 +159,8 @@ if __name__ == '__main__':
                     # (raw_img, label)
                     coord = (int(label[j, 1]), int(label[j, 0]))
                     cv2.circle(believe, coord, 10, [255, 0, 0])
-                    cv2.imwrite('mpii/results/out_%d_%d.png' % (i, j), believe)
+                    name = names[j]
+                    cv2.imwrite('mpii/results/believe_%d_%s.png' % (i, name), believe)
                 i = i + 1
                 # cv2.waitKey(1000)
                 # SimpleTrainer(config).train()
