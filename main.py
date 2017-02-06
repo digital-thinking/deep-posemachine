@@ -63,7 +63,7 @@ def get_config():
             ModelSaver(),
             InferenceRunner(dataset_test, ClassificationError()),
             ScheduledHyperParamSetter('learning_rate',
-                                      [(1, 1E-3), (60, 1E-4), (120, 1E-5)])
+                                      [(1, 1E-4), (60, 1E-5), (120, 1E-6)])
             #DumpParamAsImage('pdf_label')
 
         ]),
@@ -163,7 +163,7 @@ if __name__ == '__main__':
                     coord = (int(label[j, 1]), int(label[j, 0]))
                     cv2.circle(believe, coord, 10, [255, 0, 0])
                     name = names[j]
-                    cv2.imwrite('mpii/results/%d_believe_%s.png' % (i, name), believe)
+                    # cv2.imwrite('mpii/results/%d_believe_%s.png' % (i, name), believe)
                 i = i + 1
                 # cv2.waitKey(1000)
                 # SimpleTrainer(config).train()

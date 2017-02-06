@@ -45,21 +45,7 @@ class Model(ModelDesc):
     def _build_graph(self, input_vars, is_training):
         image, label = input_vars
 
-        tf.image_summary("train_image", image, 10)
-
-        # shared = LinearWrap(image) \
-        # .Conv2D('conv1.1', out_channel=64, kernel_shape=9) \
-        # .MaxPooling('pool1', 2, stride=2, padding='SAME') \
-        # .Conv2D('conv2.1', out_channel=128, kernel_shape=9) \
-        # .MaxPooling('pool2', 2, stride=2, padding='SAME') \
-        # .Conv2D('conv3.1', out_channel=256, kernel_shape=9) \
-        # .MaxPooling('pool3', 2, stride=2, padding='SAME') \
-        # .Conv2D('conv4.1', out_channel=512, kernel_shape=5) \
-        # .Conv2D('conv4.2', out_channel=512, kernel_shape=9) \
-        # .Conv2D('conv4.3', out_channel=512, kernel_shape=1) \
-        # .Conv2D('conv4.4', out_channel=BODY_PART_COUNT, kernel_shape=1, nl=tf.identity)()
-
-
+        # tf.image_summary("train_image", image, 10)
         gaussian = gaussian_image(label)
 
         shared = (LinearWrap(image)
@@ -104,48 +90,34 @@ class Model(ModelDesc):
         se_calc = tf.reshape(transposed, [-1, 46, 46, 1])
         error = tf.squared_difference(se_calc, gaussian, name='se_{}'.format(1))
 
-        for i in range(2, 7):
+        for i in range(2, 3):
             belief, e = add_stage(i, belief)
             error = error + e
 
         belief = tf.image.resize_bilinear(belief, [368, 368], name='resized_map')
 
-        if (not is_training):
-            pred_collapse = tf.reshape(se_calc, [-1, 46 * 46])
+        # validation error
+        pred_collapse = tf.reshape(se_calc, [-1, 46 * 46])
 
-            flatIndex = tf.argmax(pred_collapse, 1, name="flatIndex")
-            predCordsX = tf.reshape((flatIndex % 46) * 8, [-1, 1])
-            predCordsY = tf.reshape((flatIndex / 46) * 8, [-1, 1])
-            predCordsYX = tf.concat(1, [predCordsY, predCordsX])
-            predCords = tf.cast(tf.reshape(predCordsYX, [-1, 16, 2]), tf.int32, name='debug_cords')
+        flatIndex = tf.argmax(pred_collapse, 1, name="flatIndex")
+        predCordsX = tf.reshape((flatIndex % 46) * 8, [-1, 1])
+        predCordsY = tf.reshape((flatIndex / 46) * 8, [-1, 1])
+        predCordsYX = tf.concat(1, [predCordsY, predCordsX])
+        predCords = tf.cast(tf.reshape(predCordsYX, [-1, 16, 2]), tf.int32, name='debug_cords')
 
-            euclid_distance = tf.sqrt(tf.cast(tf.reduce_sum(tf.square(
-                tf.sub(predCords, label)), 2), dtype=tf.float32), name="euclid_distance")
+        euclid_distance = tf.sqrt(tf.cast(tf.reduce_sum(tf.square(
+            tf.sub(predCords, label)), 2), dtype=tf.float32), name="euclid_distance")
 
-            minradius = tf.constant(25.0, dtype=tf.float32)
-            incircle = 1 - tf.sign(tf.cast(euclid_distance / minradius, tf.int32))
-            pcp = tf.reduce_mean(tf.cast(incircle, tf.float32), name="pcp")
+        minradius = tf.constant(25.0, dtype=tf.float32)
+        incircle = 1 - tf.sign(tf.cast(euclid_distance / minradius, tf.int32))
+        pcp = tf.reduce_mean(tf.cast(incircle, tf.float32), name="pcp")
+        add_moving_summary(pcp)
 
-            add_moving_summary(euclid_distance, pcp)
-
-        # pcp  = tf.reduce_mean(tf.cond(minradius < euclid_distance, lambda: tf.constant(1.0), lambda: tf.constant(0.0)),name="pcp")
-        # debug_pred = 1.0 / (np.sqrt(2 * (sigma ** 2) * np.pi)) * tf.exp(-pred)
-        # pred = tf.reshape(tf.nn.softmax(tf.reshape(pred,[5,64*64])),[5,64,64,1])
         belief_maps_output = tf.identity(belief, "belief_maps_output")
-
-        # pdf_debug_img('pred', pred, sigma)
-
-
-        # diff = (pred - gaussian)
-        # dbg = tf.reduce_sum(tf.to_float(tf.is_nan(gaussian)))
-        # cost = tf.squared_difference(pred, gaussian, name='l2_norm')
-        # pdf_debug_img('cost', cost, sigma)
-
         cost = tf.reduce_mean(error, name='mse')
 
-        # compute the number of failed samples, for ClassificationError to use at test time
-        wrong = tf.identity(cost, name='wrong')
-        # monitor training error
+        wrong = tf.identity(1 - pcp, 'wrong')
+        add_moving_summary(wrong)
 
 
         # weight decay on all W of fc layers
