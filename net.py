@@ -90,7 +90,7 @@ class Model(ModelDesc):
         se_calc = tf.reshape(transposed, [-1, 46, 46, 1])
         error = tf.squared_difference(se_calc, gaussian, name='se_{}'.format(1))
 
-        for i in range(2, 3):
+        for i in range(2, 7):
             belief, e = add_stage(i, belief)
             error = error + e
 
@@ -110,14 +110,13 @@ class Model(ModelDesc):
 
         minradius = tf.constant(25.0, dtype=tf.float32)
         incircle = 1 - tf.sign(tf.cast(euclid_distance / minradius, tf.int32))
-        pcp = tf.reduce_mean(tf.cast(incircle, tf.float32), name="pcp")
+        pcp = tf.reduce_mean(tf.cast(incircle, tf.float32), name="train_pcp")
         add_moving_summary(pcp)
 
         belief_maps_output = tf.identity(belief, "belief_maps_output")
         cost = tf.reduce_mean(error, name='mse')
 
-        wrong = tf.identity(1 - pcp, 'wrong')
-        add_moving_summary(wrong)
+        wrong = tf.identity(1 - pcp, 'error')
 
 
         # weight decay on all W of fc layers

@@ -2,11 +2,13 @@ import argparse
 
 import numpy as np
 from tensorpack import *
+from tensorpack.callbacks.inference import ScalarStats
 
 from mpii import Mpii
 from net import Model
 
 BATCH_SIZE = 5
+
 
 def get_data(train_or_test, batch_size=10):
     isTrain = train_or_test == 'train'
@@ -61,10 +63,10 @@ def get_config():
         callbacks=Callbacks([
             StatPrinter(),
             ModelSaver(),
-            InferenceRunner(dataset_test, ClassificationError()),
+            InferenceRunner(dataset_test, ScalarStats(names_to_print='error')),
             ScheduledHyperParamSetter('learning_rate',
-                                      [(1, 1E-4), (60, 1E-5), (120, 1E-6)])
-            #DumpParamAsImage('pdf_label')
+                                      [(10, 1E-4), (60, 1E-5), (120, 1E-6)])
+            # DumpParamAsImage('pdf_label')
 
         ]),
         session_config=sess_config,
@@ -98,8 +100,6 @@ skeleton = [['r ankle', 'r knee'], ['l ankle', 'l knee'], ['l wrist', 'l elbow']
             ['r shoulder', 'r elbow'], ['l shoulder', 'l elbow'], ['r knee', 'r hip'], ['l knee', 'l hip'],
             ['thorax', 'l shoulder'], ['thorax', 'r shoulder'], ['thorax', 'upper neck'], ['upper neck', 'head top'],
             ['pelvis', 'r hip'], ['pelvis', 'l hip'], ['pelvis', 'thorax']]
-
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -152,7 +152,7 @@ if __name__ == '__main__':
                 cv2.imwrite('mpii/results/%d_augmented.png' % i, img)
                 for j in range(label.shape[0]):
                     believe = output[0][0, :, :, j]
-                    #believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
+                    # believe = cv2.resize(believe, (0, 0), fx=8, fy=8)
 
                     believe = believe - believe.min()
                     believe = believe / believe.max()

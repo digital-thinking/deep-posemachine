@@ -103,7 +103,7 @@ class Mpii(RNGDataFlow):
 
     def size(self):
         return len(self.image_paths)
-        # return 1
+        # return 20
 
     def cropAndResizeImage(self, idx):
         path = self.image_paths[idx]
