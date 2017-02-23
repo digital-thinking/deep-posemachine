@@ -164,7 +164,7 @@ class Mpii(RNGDataFlow):
 if __name__ == '__main__':
     ds = Mpii('train', dir='mpii')
     for (img, label) in ds.get_data():
-        coord = (int(label[0]), int(label[1]))
-        cv2.circle(img, coord, 10, [255, 0, 0])
+        # coord = (int(label[0]), int(label[1]))
+        # cv2.circle(img, coord, 10, [255, 0, 0])
         cv2.imshow('test', img)
         cv2.waitKey(1000)

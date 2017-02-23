@@ -77,7 +77,7 @@ def get_config():
 
 
 def get_pred_config(weights_path, input_var_names=['input', 'label'],
-                    output_names=['belief_maps_output', 'debug_cords', 'euclid_distance', 'pcp']):
+                    output_names=['belief_maps_output', 'debug_cords', 'euclid_distance', 'train_pcp']):
     loaded_model = SaverRestore(weights_path)
     config = PredictConfig(
         model=Model(),
